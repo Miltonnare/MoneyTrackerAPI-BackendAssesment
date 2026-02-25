@@ -24,7 +24,7 @@ class TransactionController extends Controller
             ]);
 
             // Use database transaction with row locking
-            $transaction = DB::transaction(function () use ($validated) {
+            $result = DB::transaction(function () use ($validated) {
                 // Lock the wallet row to prevent race conditions
                 $wallet = Wallet::where('id', $validated['wallet_id'])
                     ->lockForUpdate()
@@ -51,13 +51,21 @@ class TransactionController extends Controller
                 $wallet->save();
 
                 // Create the transaction
-                return Transaction::create($validated);
+                $transaction = Transaction::create($validated);
+
+                return [
+                    'transaction' => $transaction,
+                    'wallet' => $wallet
+                ];
             });
 
             return response()->json([
                 'success' => true,
                 'message' => 'Transaction created successfully',
-                'data' => $transaction
+                'data' => [
+                    'transaction' => $result['transaction'],
+                    'wallet_balance' => $result['wallet']->balance
+                ]
             ], 201);
 
         } catch (ValidationException $e) {
