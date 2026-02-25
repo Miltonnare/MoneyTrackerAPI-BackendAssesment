@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Wallet;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
+use Exception;
 
 class WalletController extends Controller
 {
@@ -12,14 +14,38 @@ class WalletController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
-            'user_id' => 'required|exists:users,id',
-            'name' => 'required'
-        ]);
+        try {
+            $validated = $request->validate([
+                'user_id' => 'required|exists:users,id',
+                'name' => 'required|string|max:255'
+            ]);
 
-        $wallet = Wallet::create($request->only('user_id', 'name'));
+            $wallet = Wallet::create($validated);
 
-        return response()->json($wallet, 201);
+            return response()->json([
+                'success' => true,
+                'message' => 'Wallet created successfully',
+                'data' => $wallet
+            ], 201);
+
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'data' => [
+                    'errors' => $e->errors()
+                ]
+            ], 422);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create wallet',
+                'data' => [
+                    'error' => $e->getMessage()
+                ]
+            ], 500);
+        }
     }
 
     /**
@@ -27,12 +53,40 @@ class WalletController extends Controller
      */
     public function show($id)
     {
-        $wallet = Wallet::with('transactions')->findOrFail($id);
+        try {
+            $wallet = Wallet::with('transactions')->findOrFail($id);
 
-        return response()->json([
-            'wallet' => $wallet,
-            'balance' => $wallet->balance,
-            'transactions' => $wallet->transactions
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Wallet retrieved successfully',
+                'data' => [
+                    'wallet' => [
+                        'id' => $wallet->id,
+                        'user_id' => $wallet->user_id,
+                        'name' => $wallet->name,
+                        'created_at' => $wallet->created_at,
+                        'updated_at' => $wallet->updated_at
+                    ],
+                    'balance' => $wallet->balance,
+                    'transactions' => $wallet->transactions
+                ]
+            ], 200);
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Wallet not found',
+                'data' => null
+            ], 404);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve wallet',
+                'data' => [
+                    'error' => $e->getMessage()
+                ]
+            ], 500);
+        }
     }
 }
