@@ -36,4 +36,12 @@ class User extends Model
     protected $hidden = [
         'password',
     ];
+
+    /**
+     * Get the wallets for the user.
+     */
+    public function wallets()
+    {
+        return $this->hasMany(Wallet::class);
+    }
 }
