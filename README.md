@@ -75,8 +75,8 @@ MoneyTracker API is a financial management system that allows:
 ### 1. Clone or Download the Project
 
 ```bash
-git clone <repository-url>
-cd MoneyTrackerAPI
+git clone https://github.com/Miltonnare/MoneyTrackerAPI-BackendAssesment.git
+cd MoneyTrackerAPI-BackendAssesment
 ```
 
 ### 2. Install PHP Dependencies
