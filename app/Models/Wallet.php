@@ -14,6 +14,7 @@ class Wallet extends Model
     protected $fillable = [
         'user_id',
         'name',
+        'balance',
     ];
 
     /**
@@ -30,18 +31,5 @@ class Wallet extends Model
     public function transactions()
     {
         return $this->hasMany(Transaction::class);
-    }
-
-    /**
-     * Get the wallet balance.
-     * Calculated as: income transactions - expense transactions
-     */
-    public function getBalanceAttribute()
-    {
-        return $this->transactions->sum(function ($transaction) {
-            return $transaction->type === 'income' 
-                ? $transaction->amount 
-                : -$transaction->amount;
-        });
     }
 }

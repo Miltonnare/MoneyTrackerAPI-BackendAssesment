@@ -54,7 +54,7 @@ class UserController extends Controller
     public function show($id)
     {
         try {
-            $user = User::with('wallets.transactions')->findOrFail($id);
+            $user = User::with('wallets')->findOrFail($id);
 
             $wallets = $user->wallets->map(function ($wallet) {
                 return [
@@ -64,7 +64,8 @@ class UserController extends Controller
                 ];
             });
 
-            $totalBalance = $wallets->sum('balance');
+            // Calculate total balance efficiently using database sum
+            $totalBalance = $user->wallets()->sum('balance');
 
             return response()->json([
                 'success' => true,

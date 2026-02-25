@@ -23,54 +23,42 @@ class TransactionController extends Controller
                 'amount' => 'required|numeric|min:0.01'
             ]);
 
-            // Begin database transaction
-            DB::beginTransaction();
+            // Use database transaction with row locking
+            $transaction = DB::transaction(function () use ($validated) {
+                // Lock the wallet row to prevent race conditions
+                $wallet = Wallet::where('id', $validated['wallet_id'])
+                    ->lockForUpdate()
+                    ->first();
 
-            try {
-                // Fetch wallet with transactions to check balance
-                $wallet = Wallet::with('transactions')->findOrFail($validated['wallet_id']);
-
-                // If expense, check for insufficient funds
-                if ($validated['type'] === 'expense') {
-                    $currentBalance = $wallet->balance;
-
-                    if ($validated['amount'] > $currentBalance) {
-                        DB::rollBack();
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'Insufficient funds',
-                            'data' => [
-                                'current_balance' => $currentBalance,
-                                'requested_amount' => $validated['amount']
-                            ]
-                        ], 422);
-                    }
+                if (!$wallet) {
+                    throw new \Illuminate\Database\Eloquent\ModelNotFoundException('Wallet not found');
                 }
 
-                // Create transaction
-                $transaction = Transaction::create($validated);
+                // Check for insufficient funds on expense transactions
+                if ($validated['type'] === 'expense') {
+                    if ($wallet->balance < $validated['amount']) {
+                        throw new \Exception('Insufficient funds', 422);
+                    }
 
-                // Commit transaction
-                DB::commit();
+                    // Subtract expense from wallet balance
+                    $wallet->balance -= $validated['amount'];
+                } else {
+                    // Add income to wallet balance
+                    $wallet->balance += $validated['amount'];
+                }
 
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Transaction created successfully',
-                    'data' => $transaction
-                ], 201);
+                // Save the updated wallet balance
+                $wallet->save();
 
-            } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-                DB::rollBack();
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Wallet not found',
-                    'data' => null
-                ], 404);
+                // Create the transaction
+                return Transaction::create($validated);
+            });
 
-            } catch (Exception $e) {
-                DB::rollBack();
-                throw $e;
-            }
+            return response()->json([
+                'success' => true,
+                'message' => 'Transaction created successfully',
+                'data' => $transaction
+            ], 201);
 
         } catch (ValidationException $e) {
             return response()->json([
@@ -81,7 +69,23 @@ class TransactionController extends Controller
                 ]
             ], 422);
 
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Wallet not found',
+                'data' => null
+            ], 404);
+
         } catch (Exception $e) {
+            // Check if it's the insufficient funds exception
+            if ($e->getMessage() === 'Insufficient funds' && $e->getCode() == 422) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Insufficient funds',
+                    'data' => null
+                ], 422);
+            }
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create transaction',
